@@ -14,17 +14,6 @@ export function diamond_square(sizeX, sizeY, detail = 9) {
     // heights[max][max] = 1;
     // heights[0][max] = 1;
 
-    // for (let y = 0; y < step; y++) {
-    //     const py = y / (step - 1);
-    //     const r1 = heights[0][0] + (heights[0][max] - heights[0][0]) * py;
-    //     const r2 = heights[max][0] + (heights[max][max] - heights[max][0]) * py;
-
-    //     for (let x = 0; x < step; x++) {
-    //         const px = x / (step - 1);
-    //         heights[x][y] = r1 + (r2 - r1) * px;
-    //     }
-    // }
-
     divide(heights, max, max);
 
     const startX = -sizeX / 2;

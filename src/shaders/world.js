@@ -1,4 +1,4 @@
-export const vBasic = `
+export const vWorld = `
     attribute vec4 a_position;
     attribute vec3 a_normal;
 
@@ -27,7 +27,7 @@ export const vBasic = `
     }
 `;
 
-export const fBasic = `
+export const fWorld = `
     precision highp float;
 
     varying vec4 v_color;
@@ -35,8 +35,8 @@ export const fBasic = `
     varying vec3 v_position;
 
     void main() {
-        float c = pnoise(v_position, vec3(1.0, 0.0, 0.0));
-        c = (c + 1.0) / 2.0;
-        gl_FragColor = vec4(vec3(c, c, c) * v_lighting, 1.0);
+        // float c = pnoise(v_position, vec3(1.0, 0.0, 0.0));
+        vec4 sky = vec4(0.01, 0.03, 0.04, 1.0);
+        gl_FragColor = sky + vec4(0.8 * v_lighting, 1.0);
     }
 `;

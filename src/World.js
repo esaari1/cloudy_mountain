@@ -1,28 +1,22 @@
 import { useEffect, useRef, useState } from "react";
-import { fBasic, vBasic } from "./shaders/basic";
+import { vWorld, fWorld } from "./shaders/world";
 import { initShaderProgram } from "./webgl";
 
-import './Map.css';
+import './World.css';
 import { resizeCanvasToDisplaySize } from "./util";
 import { mat4, vec3 } from "gl-matrix";
-import { diamond_square } from "./diamond_square";
 import { perlinNoise } from "./shaders/perlin";
+import { diamond_square } from './noise/diamond_square';
+import { perlin } from './noise/perlin';
+import { vSkybox, fSkybox } from "./shaders/skybox";
 
-function Map() {
+function World() {
 
     const initialized = useRef(false);
     const glRef = useRef();
-    const program = useRef();
-    const positionAttributeLocation = useRef();
-    const normalAttributeLocation = useRef();
-    const positionBuffer = useRef();
-    const normalBuffer = useRef();
-    const indexBuffer = useRef();
-    const indexCount = useRef();
-    const pointCount = useRef(0);
 
-    const minY = useRef(0);
-    const maxY = useRef(0);
+    const skyboxData = useRef({});
+    const worldData = useRef({});
 
     const [doRotate, setDoRotate] = useState(false);
     const [cameraPhi, setCameraPhi] = useState(0);
@@ -57,29 +51,8 @@ function Map() {
 
         gl.getExtension('OES_element_index_uint');
 
-        program.current = initShaderProgram(gl, vBasic, perlinNoise + fBasic);
-
-        const data = diamond_square(4, 4, 9);
-
-        positionAttributeLocation.current = gl.getAttribLocation(program.current, "a_position");
-        positionBuffer.current = gl.createBuffer();
-        gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer.current);
-        gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(data.points), gl.STATIC_DRAW);
-
-        normalAttributeLocation.current = gl.getAttribLocation(program.current, "a_normal");
-        normalBuffer.current = gl.createBuffer();
-        gl.bindBuffer(gl.ARRAY_BUFFER, normalBuffer.current);
-        gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(data.normals), gl.STATIC_DRAW);
-
-        indexBuffer.current = gl.createBuffer();
-        gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, indexBuffer.current);
-        gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint32Array(data.faces), gl.STATIC_DRAW);
-
-        indexCount.current = data.faces.length;
-        pointCount.current = data.points.length / 3;
-
-        minY.current = data.minY;
-        maxY.current = data.maxY;
+        initSkybox(gl);
+        initWorld(gl);
 
         glRef.current = gl;
         drawScene();
@@ -88,8 +61,55 @@ function Map() {
         initialized.current = true;
     }
 
-    function drawScene() {
+    function initSkybox(gl) {
+        const program = initShaderProgram(gl, vSkybox, fSkybox);
+        skyboxData.current.program = program;
 
+        var positions = new Float32Array(
+            [
+                -1, -1,
+                1, -1,
+                -1, 1,
+                -1, 1,
+                1, -1,
+                1, 1
+            ]);
+
+
+        skyboxData.current.positionAttribLoc = gl.getAttribLocation(program, "a_position");
+        skyboxData.current.positionBuffer = gl.createBuffer();
+        gl.bindBuffer(gl.ARRAY_BUFFER, skyboxData.current.positionBuffer);
+        gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(positions), gl.STATIC_DRAW);
+    }
+
+    function initWorld(gl) {
+        const program = initShaderProgram(gl, vWorld, perlinNoise + fWorld);
+        worldData.current.program = program;
+
+        const data = diamond_square(4, 4, 9);
+        //const data = perlin(4, 7);
+
+        worldData.current.positionAttribLoc = gl.getAttribLocation(program, "a_position");
+        worldData.current.positionBuffer = gl.createBuffer();
+        gl.bindBuffer(gl.ARRAY_BUFFER, worldData.current.positionBuffer);
+        gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(data.points), gl.STATIC_DRAW);
+
+        worldData.current.normalAttribLoc = gl.getAttribLocation(program, "a_normal");
+        worldData.current.normalBuffer = gl.createBuffer();
+        gl.bindBuffer(gl.ARRAY_BUFFER, worldData.current.normalBuffer);
+        gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(data.normals), gl.STATIC_DRAW);
+
+        worldData.current.indexBuffer = gl.createBuffer();
+        gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, worldData.current.indexBuffer);
+        gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint32Array(data.faces), gl.STATIC_DRAW);
+
+        worldData.current.indexCount = data.faces.length;
+
+        worldData.current.minY = data.minY;
+        worldData.current.maxY = data.maxY;
+    }
+
+    function drawScene() {
         const gl = glRef.current;
 
         gl.enable(gl.CULL_FACE);
@@ -102,16 +122,36 @@ function Map() {
         gl.clearColor(0, 0, 0, 0);
         gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
 
+        drawSkybox(gl);
+        drawMap(gl);
+    }
+
+    function drawSkybox(gl) {
+
+        const program = skyboxData.current.program;
+        gl.useProgram(program);
+
+        gl.enableVertexAttribArray(skyboxData.current.positionAttribLoc);
+        gl.bindBuffer(gl.ARRAY_BUFFER, skyboxData.current.positionBuffer);
+        gl.vertexAttribPointer(skyboxData.current.positionAttribLoc, 2, gl.FLOAT, false, 0, 0);
+
+        gl.depthFunc(gl.LEQUAL);
+        gl.drawArrays(gl.TRIANGLES, 0, 6);
+    }
+
+    function drawMap(gl) {
+
+        const program = worldData.current.program;
         // Tell it to use our program (pair of shaders)
-        gl.useProgram(program.current);
+        gl.useProgram(program);
 
-        gl.enableVertexAttribArray(positionAttributeLocation.current);
-        gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer.current);
-        gl.vertexAttribPointer(positionAttributeLocation.current, 3, gl.FLOAT, false, 0, 0);
+        gl.enableVertexAttribArray(worldData.current.positionAttribLoc);
+        gl.bindBuffer(gl.ARRAY_BUFFER, worldData.current.positionBuffer);
+        gl.vertexAttribPointer(worldData.current.positionAttribLoc, 3, gl.FLOAT, false, 0, 0);
 
-        gl.enableVertexAttribArray(normalAttributeLocation.current);
-        gl.bindBuffer(gl.ARRAY_BUFFER, normalBuffer.current);
-        gl.vertexAttribPointer(normalAttributeLocation.current, 3, gl.FLOAT, false, 0, 0);
+        gl.enableVertexAttribArray(worldData.current.normalAttribLoc);
+        gl.bindBuffer(gl.ARRAY_BUFFER, worldData.current.normalBuffer);
+        gl.vertexAttribPointer(worldData.current.normalAttribLoc, 3, gl.FLOAT, false, 0, 0);
 
         const fieldOfView = (45 * Math.PI) / 180; // in radians
         const aspect = gl.canvas.clientWidth / gl.canvas.clientHeight;
@@ -126,32 +166,28 @@ function Map() {
         const camera = cameraMatrix();
         mat4.multiply(projectionMatrix, projectionMatrix, camera);
 
-        const uProjection = gl.getUniformLocation(program.current, "u_projection");
+        const uProjection = gl.getUniformLocation(program, "u_projection");
         gl.uniformMatrix4fv(uProjection, false, projectionMatrix);
 
         const modelViewMatrix = mat4.create();
         mat4.translate(modelViewMatrix, modelViewMatrix, [0, 0, 0]);
 
-        const uModelViewMatrix = gl.getUniformLocation(program.current, "u_modelViewMatrix");
+        const uModelViewMatrix = gl.getUniformLocation(program, "u_modelViewMatrix");
         gl.uniformMatrix4fv(uModelViewMatrix, false, modelViewMatrix);
 
         const normalMatrix = mat4.create();
         mat4.invert(normalMatrix, modelViewMatrix);
         mat4.transpose(normalMatrix, normalMatrix);
 
-        const uNormalMatric = gl.getUniformLocation(program.current, "u_normalMatrix");
+        const uNormalMatric = gl.getUniformLocation(program, "u_normalMatrix");
         gl.uniformMatrix4fv(uNormalMatric, false, normalMatrix);
 
-        const uBounds = gl.getUniformLocation(program.current, "u_bounds");
-        gl.uniform2f(uBounds, minY.current, maxY.current);
-
-        //gl.drawArrays(gl.TRIANGLES, 0, pointCount.current);
+        const uBounds = gl.getUniformLocation(program, "u_bounds");
+        gl.uniform2f(uBounds, worldData.current.minY, worldData.current.maxY);
 
         // bind the buffer containing the indices
-        gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, indexBuffer.current);
-        gl.drawElements(gl.TRIANGLES, indexCount.current, gl.UNSIGNED_INT, 0);
-
-        glRef.current = gl;
+        gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, worldData.current.indexBuffer);
+        gl.drawElements(gl.TRIANGLES, worldData.current.indexCount, gl.UNSIGNED_INT, 0);
     }
 
     function cameraMatrix() {
@@ -171,7 +207,7 @@ function Map() {
 
         const m = mat4.create();
         mat4.lookAt(m, eye, [0, 0, 0], up);
-        //mat4.invert(m, m);
+
         return m;
     }
 
@@ -205,4 +241,4 @@ function Map() {
     )
 }
 
-export default Map;
+export default World;

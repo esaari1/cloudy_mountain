@@ -1,8 +1,8 @@
-import Map from "./Map";
+import World from "./World";
 
 function App() {
   return (
-    <Map></Map>
+    <World></World>
   );
 }
 
